@@ -28,19 +28,15 @@
   (fn [a1 a2 & args]
     (apply f a2 a1 args)))
 
+
 ;; 0. Recap
 
-;; Recap: Higher-order functions
-(facts ""
-  ((complement odd?) 3) => (even? 3)
-  )
-
-(facts ""
-  (identity []) => []
-  (conj [1 2] 3) => [1 2 3]
-  (reduce + 0 [1 2 3]) => 6
-  (map inc [1 2 3]) => [2 3 4]
-  (map str [1 2 3]) => ["1" "2" "3"]
+(comment
+  (identity [])
+  (conj [1 2] 3)
+  (reduce + 0 [1 2 3])
+  (map inc [1 2 3])
+  (map str [1 2 3])
   )
 
 
@@ -73,6 +69,12 @@
   (reduce (spy max) Integer/MIN_VALUE [1 3 2])
   (reduce (spy (flip cons)) '(100) [1 2 3])
   ((reduce (spy comp) [str inc inc inc inc inc]) 100)
+  )
+
+
+;; Recap: Higher-order functions
+(facts ""
+  ((complement odd?) 3) => (even? 3)
   )
 
 
