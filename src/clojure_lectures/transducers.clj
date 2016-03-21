@@ -187,6 +187,10 @@
        (filter (spy odd?))
        (map (spy inc)))
   (sequence (comp filter-odd map-inc) (range 40))
+
+  (let [coll (vec (range 1000000))]
+    (time (count (sequence (comp (map inc) (map inc) (map inc) (map inc) (map str)) coll)))
+    (time (count (->> coll (map inc) (map inc) (map inc) (map inc) (map str)))))
   )
 
 
@@ -245,8 +249,9 @@
              (rf result input))))))))
 
 (comment
-  (time (count (sequence (dedupe) (range 1000000))))
-  (time (count (sequence (my-dedupe) (range 1000000))))
+  (let [coll (vec (range 1000000))]
+    (time (count (sequence (dedupe) coll)))
+    (time (count (sequence (my-dedupe) coll))))
   )
 
 (facts "my-dedupe"
