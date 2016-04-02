@@ -7,7 +7,6 @@
   ([f name]
    (fn [& args]
      (let [result   (apply f args)
-           ;args-str (clojure.string/join " " (cons name (map pr-str (vec args))))
            args-str (->> (vec args)
                          (map pr-str)
                          (cons name)
@@ -20,9 +19,15 @@
   (let [fname (str f)]
     `(spyfn ~f ~fname)))
 
+(defmacro with-spy [fns & body]
+  (let [bindings (vec (mapcat #(vector % `(spy ~%)) fns))]
+    `(let ~bindings
+       ~@body)))
+
 (comment
   ((spy (comp inc inc)) 1)
-  ((spy (fn [x] (str x))) 1))
+  ((spy (fn [x] (str x))) 1)
+  (macroexpand-1 `(with-spy [+] (+ 1 2))))
 
 (defn flip [f]
   (fn [a1 a2 & args]
@@ -62,13 +67,21 @@
 ;; (Acc, X) => Acc
 
 (comment
-  (reduce (spy +) 100 [1 2 3])
-  (reduce (spy *) 100 [1 2 3])
-  (reduce (spy conj) [100] [1 2 3])
-  (reduce (spy str) "100" [1 2 3])
-  (reduce (spy max) Integer/MIN_VALUE [1 3 2])
-  (reduce (spy (flip cons)) '(100) [1 2 3])
-  ((reduce (spy comp) [str inc inc inc inc inc]) 100)
+  (with-spy [+]
+    (reduce + 100 [1 2 3]))
+  (with-spy [*]
+    (reduce * 100 [1 2 3]))
+  (with-spy [conj]
+    (reduce conj [100] [1 2 3]))
+  (with-spy [str]
+    (reduce str "100" [1 2 3]))
+  (with-spy [max]
+    (reduce max Integer/MIN_VALUE [1 3 2]))
+  (let [prepend (flip cons)]
+    (with-spy [prepend]
+      (reduce prepend '(100) [1 2 3])))
+  (with-spy [comp]
+    ((reduce comp [str inc inc inc inc inc]) 100))
   )
 
 
@@ -107,42 +120,60 @@
 
 ;; Use cases:
 
-(def map-inc (map (spy inc)))
-(def map-str (map (spy str)))
-(def filter-odd (filter (spy odd?)))
+;(def map-inc (map (spy inc)))
+;(def map-str (map (spy str)))
+;(def filter-odd (filter (spy odd?)))
 
 (comment
-  (reduce (spy +) 100 [1 2 3])
-  (reduce (map-inc (spy +)) 100 [1 2 3])
+  (with-spy [+]
+    (reduce + 100 [1 2 3]))
+  (with-spy [+ inc]
+    (reduce ((map inc) +) 100 [1 2 3]))
 
-  (reduce + 100 (filter odd? [1 2 3]))
-  (reduce (filter-odd (spy +)) 100 [1 2 3])
+  (with-spy [+ odd?]
+    (reduce + 100 (filter odd? [1 2 3])))
+  (with-spy [+ odd?]
+    (reduce ((filter odd?) +) 100 [1 2 3]))
 
-  (reduce (spy conj) [100] [1 2 3])
+  (with-spy [conj]
+    (reduce (spy conj) [100] [1 2 3]))
 
-  (reduce conj [100] (map inc [1 2 3]))
-  (reduce (map-inc (spy conj)) [100] [1 2 3])
-  (reduce (filter-odd (spy conj)) [100] [1 2 3])
+  (with-spy [conj]
+    (reduce conj [100] (map inc [1 2 3])))
+  (with-spy [conj inc]
+    (reduce ((map inc) conj) [100] [1 2 3]))
+  (with-spy [conj odd?]
+    (reduce ((filter odd?) conj) [100] [1 2 3]))
 
-  (map (comp inc inc inc) [1 2 3])
-  (map inc (map inc (map inc [1 2 3])))
+  (with-spy [inc]
+    (map (comp inc inc inc) [1 2 3]))
+  (with-spy [inc]
+    (map inc (map inc (map inc [1 2 3]))))
 
   ;; reduce on steroids
-  (transduce map-inc (spy +) [1 2 3])
+  (with-spy [+ inc]
+    (transduce (map inc) + [1 2 3]))
 
-  (reduce + 0 (filter odd? [1 2 3]))
-  (transduce (filter odd?) + [1 2 3])
+  (with-spy [+ odd?]
+    (reduce + 0 (filter odd? [1 2 3])))
+  (with-spy [+ odd?]
+    (transduce (filter odd?) + [1 2 3]))
 
-  (reduce + 0 (filter odd? (map inc [1 2 3])))
-  (transduce (comp (map inc) (filter odd?)) + [1 2 3])
+  (with-spy [+ odd?]
+    (reduce + 0 (filter odd? (map inc [1 2 3]))))
+  (with-spy [+ odd? inc]
+    (transduce (comp (map inc) (filter odd?)) + [1 2 3]))
 
   ;; no initial value, broken
-  (reduce (map-inc (spy +)) [1 2 3])
+  (with-spy [+ inc]
+    (reduce ((map inc) +) [1 2 3]))
 
   (into [100] [1 2 3 4])
   ;; same as
-  (transduce map-inc (spy conj) [100] [1 2 3])
-  (reduce (map-inc (spy conj)) [100] [1 2 3])
+  (with-spy [inc conj]
+    (transduce (map inc) conj [100] [1 2 3]))
+  (with-spy [inc conj]
+    (reduce (map-inc (spy conj)) [100] [1 2 3]))
 
   ;; also
   (let [trx (map inc)]
@@ -152,19 +183,24 @@
   (into #{100} [1 2 3 4])
 
   ;; transform multiple collections at once
-  (sequence map-inc [1 2 3])
+  (with-spy [inc conj]
+    (sequence (map inc) [1 2 3]))
   ;; same as
-  (transduce map-inc (spy conj) [100] [1 2 3])
+  (with-spy [inc conj]
+    (transduce (map inc) conj [100] [1 2 3]))
 
   ;; but can be used with more than 1 coll
-  (sequence (map (spy +)) [1 2 3] [4 5] [6 7])
-  (map + [1 2 3] [4 5] [6 7])
+  (with-spy [+]
+    (sequence (map +) [1 2 3] [4 5] [6 7]))
+  (with-spy [+]
+    (map + [1 2 3] [4 5] [6 7]))
 
   ;; Bundle transducer with collection
-  (let [ed (eduction map-inc (range 3))]
-    (prn "Hello")
-    (prn (first ed))
-    (reduce (spy str) "===" ed))
+  (with-spy [inc str]
+    (let [ed (eduction (map inc) (range 3))]
+      (prn "Hello")
+      (prn (first ed))
+      (reduce str "===" ed)))
   )
 
 
@@ -222,15 +258,19 @@
 ;; Composing transducers
 
 (comment
-  (->> (range 40)
-       (map (spy inc))
-       (filter (spy odd?)))
-  (sequence (comp map-inc filter-odd) (range 40))
+  (with-spy [inc odd?]
+    (->> (range 40)
+         (map inc)
+         (filter odd?)))
+  (with-spy [inc odd?]
+    (sequence (comp (map inc) (filter odd?)) (range 40)))
 
-  (->> (range 40)
-       (filter (spy odd?))
-       (map (spy inc)))
-  (sequence (comp filter-odd map-inc) (range 40))
+  (with-spy [inc odd?]
+    (->> (range 40)
+         (filter odd?)
+         (map inc)))
+  (with-spy [inc odd?]
+    (sequence (comp (filter odd?) (map inc)) (range 40)))
 
   (let [coll (vec (range 1000000))]
     (time (count (sequence (comp (map inc) (map inc) (map inc) (map inc) (map str)) coll)))
@@ -240,19 +280,19 @@
 
 ;; 8. Replacing transducer
 
-(def map-dec (map (spy dec)))
-
 (comment
-  (transduce (comp map-dec
-                   (constantly (spy +))
-                   map-inc)
-             (spy *)
-             [1 2 3])
-  (transduce (comp map-dec
-                   (constantly (spy str))
-                   map-inc)
-             (spy conj)
-             [1 2 3])
+  (with-spy [dec inc + *]
+    (transduce (comp (map dec)
+                     (constantly +)
+                     (map inc))
+               *
+               [1 2 3]))
+  (with-spy [dec inc str conj]
+    (transduce (comp (map dec)
+                     (constantly str)
+                     (map inc))
+               conj
+               [1 2 3]))
   )
 
 
