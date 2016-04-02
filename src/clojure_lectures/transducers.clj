@@ -78,10 +78,32 @@
   )
 
 
-;; Transducer: ((Acca, A) => Acca) => ((Accb, B) => Accb)
+;; Transducer: ((Accx, X) => Accx) => ((Accy, Y) => Accy)
 ;; Transducer may be implemented as middleware (aka decorator)
 
 ;; Simplest transducer?
+
+;; How to obtain?
+
+(comment
+  (map inc)
+  (filter odd?)
+  (remove even?)
+  (take 5)
+  (take-while neg?)
+  (drop 42)
+  (drop-while nil?)
+  (partition-all 2)
+  (partition-by pos?)
+  (dedupe)
+  (distinct)
+  (random-sample 0.5)
+  cat
+
+  ((map inc) +)
+  ((map inc) ((map inc) conj))
+  )
+
 
 ;; Use cases:
 
@@ -92,21 +114,42 @@
 (comment
   (reduce (spy +) 100 [1 2 3])
   (reduce (map-inc (spy +)) 100 [1 2 3])
+
+  (reduce + 100 (filter odd? [1 2 3]))
   (reduce (filter-odd (spy +)) 100 [1 2 3])
 
   (reduce (spy conj) [100] [1 2 3])
+
+  (reduce conj [100] (map inc [1 2 3]))
   (reduce (map-inc (spy conj)) [100] [1 2 3])
   (reduce (filter-odd (spy conj)) [100] [1 2 3])
 
+  (map (comp inc inc inc) [1 2 3])
+  (map inc (map inc (map inc [1 2 3])))
+
   ;; reduce on steroids
   (transduce map-inc (spy +) [1 2 3])
+
+  (reduce + 0 (filter odd? [1 2 3]))
+  (transduce (filter odd?) + [1 2 3])
+
+  (reduce + 0 (filter odd? (map inc [1 2 3])))
+  (transduce (comp (map inc) (filter odd?)) + [1 2 3])
+
   ;; no initial value, broken
   (reduce (map-inc (spy +)) [1 2 3])
 
-  (into [100] map-inc [1 2 3])
+  (into [100] [1 2 3 4])
   ;; same as
   (transduce map-inc (spy conj) [100] [1 2 3])
   (reduce (map-inc (spy conj)) [100] [1 2 3])
+
+  ;; also
+  (let [trx (map inc)]
+    (into [100] trx [1 2 3]))
+  (into [100] (filter odd?) [1 2 3])
+  (into '(100) [1 2 3 4])
+  (into #{100} [1 2 3 4])
 
   ;; transform multiple collections at once
   (sequence map-inc [1 2 3])
@@ -115,9 +158,10 @@
 
   ;; but can be used with more than 1 coll
   (sequence (map (spy +)) [1 2 3] [4 5] [6 7])
+  (map + [1 2 3] [4 5] [6 7])
 
   ;; Bundle transducer with collection
-  (let [ed (eduction map-inc (range 30))]
+  (let [ed (eduction map-inc (range 3))]
     (prn "Hello")
     (prn (first ed))
     (reduce (spy str) "===" ed))
@@ -151,8 +195,8 @@
   (fn [rf]
     (fn
       ([] (rf))
-      ([result] (rf result))
-      ([result input] (rf result (f input))))))
+      ([acc] (rf acc))
+      ([acc x] (rf acc (f x))))))
 
 (facts "make-map-transducer"
   (transduce (make-map-transducer inc) + [1 2 3]) => (transduce (map inc) + [1 2 3])
@@ -165,10 +209,10 @@
   (fn [rf]
     (fn
       ([] (rf))
-      ([result] (rf result))
-      ([result input] (if (pred input)
-                        (rf result input)
-                        result)))))
+      ([acc] (rf acc))
+      ([acc x] (if (pred x)
+                 (rf acc x)
+                 acc)))))
 
 (facts "make-filter-transducer"
   (transduce (make-filter-transducer odd?) + [1 2 3]) => (transduce (filter odd?) + [1 2 3])
